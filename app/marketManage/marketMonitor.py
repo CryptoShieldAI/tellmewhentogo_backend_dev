@@ -1,42 +1,36 @@
-from BybitApi import BybitApi
-import time
-import sched
 from collections import deque
+import sched
+import time
 import threading
+from .bybitApi import BybitApi
 import pandas as pd
-from Utils import average
-import warnings
-warnings.filterwarnings("ignore")
+from .utils import *
 
-
-class Market():
+class MarketMonitor():
     def __init__(self, symbol, marketManager):
         self.symbol = symbol
         self.prev_price = 0
         self.current_price = 0
-        
+
         self.marketManager = marketManager
+
         self.price_changes = deque(maxlen=self.marketManager.repeating_count)
         self.transaction_history = deque(maxlen=15)
-        
 
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.bybitApi = BybitApi(self)
 
-        self.signal_status = 'fluctuation'
+        self.signal_status = 'flutuation'
         self.signal_start_time = None
-
-        self.transaction_count_in_cycle = 0
 
         self.current_pi = 0
         self.current_rank_level = self.marketManager.rank_level
-
-        self.initialize()
 
         self.timer_status = True
         self.second_timer = threading.Thread(target=self.run_scheduler, daemon=True)
         self.second_timer.start()
 
+        self.initialize()
 
     def __del__(self):
         print("market object destory")
@@ -54,17 +48,16 @@ class Market():
         self.pricesOnSecond = pd.DataFrame({'price': []})
 
         self.start_cycle_time = int(time.time() * 1000)
-    
+
     def run_scheduler(self):
         if self.timer_status: 
             self.scheduler.enter(1, 1, self.on_second)
             self.scheduler.run()
-
+    
     def on_ticker(self, time, price):
         self.current_price = float(price)
         self.price_history = self.price_history.append({'ts': time, 'price': price}, ignore_index=True)
 
-    
     def on_second(self):
         self.second_in_cycle += 1
         self.pricesOnSecond = self.pricesOnSecond.append({'price': self.current_price}, ignore_index=True)
@@ -100,7 +93,7 @@ class Market():
                 self.marketManager.addCurrentSignals(self.symbol)
         else:
             self.marketManager.removeCurrentSignals(self.symbol)
-
+    
     def on_end_cycle(self):
         # average_price = Average(self.price_history['price'])
         self.transaction_count_in_cycle = len(self.price_history)
@@ -119,19 +112,3 @@ class Market():
 
     def getMarketHistory(self, resolution, _from, to):
         return self.bybitApi.getKline(resolution, _from, to)
-    
-if __name__ == '__main__':
-    from MarketManager import MarketManager
-    from Database import Database
-    import sys
-    db = Database()
-    marketManager = MarketManager(db)
-    market = Market('BTCUSDT', marketManager)
-    print('test')
-    print(sys.getrefcount(market))
-    
-    market.preDestroy()
-    print(sys.getrefcount(market))
-    del market
-    while True:
-        pass

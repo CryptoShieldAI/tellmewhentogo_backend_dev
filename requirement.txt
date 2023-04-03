@@ -1,0 +1,7 @@
+Flask
+Flask-Script
+flask-sqlalchemy
+flask-migrate
+flask-bcrypt
+flask-cors
+flast-jwt-extended
