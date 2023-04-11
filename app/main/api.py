@@ -1,5 +1,6 @@
 from flask import jsonify, request
 from app.models import Signal
+from app.models import Market
 import time
 from app import db, marketManager
 from . import main
@@ -17,10 +18,19 @@ def getPump(period):
     startTime = currentTime - (24 * 3600 if period == 'day' else 24 * 3600 * 7)
     # startTime = int(startTime * 1000)
 
-    pumpList = Signal.query.with_entities(
-        Signal.symbol, 
-        db.func.count(Signal.symbol).label("count")    
-    ).filter_by(type='pump').filter(Signal.start_time >=startTime).group_by(Signal.symbol).all()
+    subq = db.select(Signal.symbol, db.func.count(Signal.symbol).label("count")).filter_by(
+            type = 'pump', 
+            ).filter(Signal.start_time >= startTime).group_by(Signal.symbol).subquery()
+    
+    # stmt = db.select(Market, subq.c.count).join(subq, Market.symbol == subq.c.symbol)
+    stmt = db.select(Market.symbol, subq.c.count).join(subq, Market.symbol==subq.c.symbol, isouter=True).order_by(
+        subq.c.count.desc()
+    ).limit(10)
+    
+    pumpList = db.session.execute(
+        stmt
+    ).all()
+    
 
     pumpList = list(map(lambda market: {
         'symbol': market.symbol, 
@@ -36,18 +46,27 @@ def getDump(period):
     startTime = currentTime - (24 * 3600 if period == 'day' else 24 * 3600 * 7)
     # startTime = int(startTime * 1000)
 
-    pumpList = Signal.query.with_entities(
-        Signal.symbol, 
-        db.func.count(Signal.symbol).label("count")    
-    ).filter_by(type='dump').filter(Signal.start_time >=startTime).group_by(Signal.symbol).all()
+    subq = db.select(Signal.symbol, db.func.count(Signal.symbol).label("count")).filter_by(
+            type = 'dump', 
+            ).filter(Signal.start_time >= startTime).group_by(Signal.symbol).subquery()
+    
+    # stmt = db.select(Market, subq.c.count).join(subq, Market.symbol == subq.c.symbol)
+    stmt = db.select(Market.symbol, subq.c.count).join(subq, Market.symbol==subq.c.symbol, isouter=True).order_by(
+        subq.c.count.desc()
+    ).limit(10)
+    
+    dumpList = db.session.execute(
+        stmt
+    ).all()
+    
 
-    pumpList = list(map(lambda market: {
+    dumpList = list(map(lambda market: {
         'symbol': market.symbol, 
         'spot': marketManager.getSpot(market.symbol),
         'count': 0 if market.count is None else market.count
-    }, pumpList))
+    }, dumpList))
 
-    return jsonify(pumpList), 200
+    return jsonify(dumpList), 200
     
 @main.route('/current/signals')
 def getCurrentSignals():

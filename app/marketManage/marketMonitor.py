@@ -112,3 +112,6 @@ class MarketMonitor():
 
     def getMarketHistory(self, resolution, _from, to):
         return self.bybitApi.getKline(resolution, _from, to)
+    
+    def addTrade(self, trade):
+        pass

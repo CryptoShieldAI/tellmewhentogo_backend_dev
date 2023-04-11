@@ -2,7 +2,9 @@ from app import db
 from app.models import GlobalSetting
 from app.models import LevelPercent
 from app.models import Market
+from app.models import Signal
 from .marketMonitor import MarketMonitor
+import time
 
 class MarketManager():
     def __init__(self, app=None):
@@ -30,8 +32,10 @@ class MarketManager():
         if self.marketMonitors.get(symbol) is not None:
             print(f'market {symbol} already exists')
             return
-        market = Market(symbol)
+        
+        market = Market.query.filter_by(symbol=symbol).first()
         if market is None:
+            market = Market(symbol)
             db.session.add(market)
             db.session.commit()
         
@@ -92,13 +96,40 @@ class MarketManager():
         return self.marketMonitors[symbol].current_price
     
     def addCurrentSignals(self, symbol):
-        pass
+        if symbol in self.current_signals:
+            return
+        marketMonitor = self.marketMonitors.get(symbol)
+        if marketMonitor is not None:
+            marketMonitor.signal_start_time = time.time() - self.repeating_count
+            self.current_signals.append(symbol)
 
     def removeCurrentSignals(self, symbol):
-        pass
+        if symbol in self.current_signals:
+            marketMonitor = self.marketMonitors.get(symbol)
+            if marketMonitor != None:
+                try:
+                    signal = Signal(marketMonitor.symbol, marketMonitor.signal_status, 
+                                    marketMonitor.signal_start_time, 
+                                    time.time())
+                    db.session.add(signal)
+                    db.session.commit()
+                except:
+                    pass
+            self.current_signals.remove(symbol)
+
+    def getMarketData(self, symbol):
+        marketMonitor = self.marketMonitors.get(symbol)
+        return {
+            'symbol': marketMonitor.symbol,
+            'spot': marketMonitor.current_price,
+            'signal_status': marketMonitor.signal_status,
+            'signal_start_time': marketMonitor.signal_start_time,
+            'pi': marketMonitor.current_pi, 
+            'rank_level': marketMonitor.current_rank_level
+        }
 
     def getCurrentSignals(self):
-        symbols = list(filter(lambda symbol: self.markets.get(symbol) is not None, self.current_signals))
+        symbols = list(filter(lambda symbol: self.marketMonitors.get(symbol) is not None, self.current_signals))
         return list(map(lambda symbol: self.getMarketData(symbol), symbols))
     
     def getSymbolList(self):
@@ -126,7 +157,6 @@ class MarketManager():
     def setLevelPercent(self, level, percent):
         levelPercent = LevelPercent.query.filter_by(level=level).first()
         levelPercent.percent = percent
-        db.session.update(levelPercent)
         db.session.commit()
 
     def setSymbolList(self, symbolList):
@@ -146,5 +176,12 @@ class MarketManager():
         marketMonitor = self.marketMonitors.get(symbol)
         if marketMonitor is None:
             return []
-        
         return marketMonitor.getMarketHistory(resolution, _from, to)
+    
+    def addTrade(self, trade):
+        symbol = trade.symbol
+        marketMonitor = self.marketMonitors.get(symbol)
+        if marketMonitor is None: 
+            return
+        
+        marketMonitor.addTrade(trade)

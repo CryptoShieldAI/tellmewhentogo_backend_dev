@@ -43,5 +43,8 @@ def create_app(config_name):
 
     from .settings import settings as settings_blueprint
     app.register_blueprint(settings_blueprint, url_prefix='/setting')
-    
+
+    from .trade import trade as trade_blueprint
+    app.register_blueprint(trade_blueprint, url_prefix='/trade')
+
     return app

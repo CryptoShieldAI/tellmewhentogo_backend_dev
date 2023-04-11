@@ -2,9 +2,10 @@ from app import db
 
 class Market(db.Model):
     __tablename__='markets'
-    symbol = db.Column(db.String(64), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
+    symbol = db.Column(db.String(64), unique=True, nullable=False)
 
-    def __init__(self, symbol, marketManager=None):
+    def __init__(self, symbol):
         self.symbol = symbol
         
 
