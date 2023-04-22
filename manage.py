@@ -6,6 +6,9 @@ from app.models.market import Market
 from flask_script import Manager, Shell
 from flask_migrate import Migrate
 
+import warnings
+warnings.filterwarnings("ignore")
+
 app = create_app(os.getenv('FLASK_CONFIG') or 'default')
 manager = Manager(app)
 migrate = Migrate(app, db)
@@ -20,6 +23,11 @@ manager.add_command("shell", Shell(make_context=make_shell_context))
 def runserver():
     marketManager.initialize()
     app.run()
+
+@manager.command
+def dev():
+    marketManager.initialize()
+    app.run(port=5001)
     
 @manager.command
 def test():
@@ -31,6 +39,7 @@ def test():
 def createDb():
     db.create_all()
 
+   
 @manager.command
 def dbInit():
     market = Market('BTCUSDT')

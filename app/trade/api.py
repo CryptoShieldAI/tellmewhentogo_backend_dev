@@ -19,7 +19,10 @@ def getCurrentTradeList():
             completedTrades = Trade.query.filter_by(user_id=user.id).filter(Trade.end_price != None).order_by(Trade.end_time.desc()).limit(10).all()
             responseObject = {
                 'status': 'success', 
-                'currentTrade': list(map(lambda trade: trade.toObject(), currentTrades)), 
+                'currentTrade': list(map(lambda trade: {
+                    'trade': trade.toObject(), 
+                    'market': marketManager.getMarketData(trade.symbol)
+                }, currentTrades)), 
                 'completedTrade': list(map(lambda trade: trade.toObject(), completedTrades))
             }
             return jsonify(responseObject), 200
@@ -262,6 +265,9 @@ def startTrade():
                 db.session.add(trade)
                 db.session.commit()
 
+                if is_ftb:
+                    marketManager.addTrade(trade)
+
                 responseObject = {
                     'status': 'success'
                 }
@@ -290,7 +296,6 @@ def closeTrade():
     try:
         user = User.query.filter_by(email=email).first()
         if user:
-            print(post_data)
             trade = Trade.query.filter_by(id=post_data.get('tradeId')).first()
             if trade and trade.user_id == user.id:
                 end_price = marketManager.getSpot(trade.symbol)

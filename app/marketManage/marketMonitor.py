@@ -5,6 +5,9 @@ import threading
 from .bybitApi import BybitApi
 import pandas as pd
 from .utils import *
+import datetime
+from app.models import User, Trade
+from app import db
 
 class MarketMonitor():
     def __init__(self, symbol, marketManager):
@@ -25,12 +28,16 @@ class MarketMonitor():
 
         self.current_pi = 0
         self.current_rank_level = self.marketManager.rank_level
+        
+        self.app = marketManager.app
 
         self.timer_status = True
         self.second_timer = threading.Thread(target=self.run_scheduler, daemon=True)
         self.second_timer.start()
 
         self.initialize()
+
+        self.trades = []
 
     def __del__(self):
         print("market object destory")
@@ -61,6 +68,7 @@ class MarketMonitor():
     def on_second(self):
         self.second_in_cycle += 1
         self.pricesOnSecond = self.pricesOnSecond.append({'price': self.current_price}, ignore_index=True)
+
         
         if self.current_price > self.prev_price:
             self.price_changes.append(1)
@@ -71,6 +79,7 @@ class MarketMonitor():
 
         self.checkGrowth()
 
+        self.checkStopFTBTrades()
 
         if self.second_in_cycle >= self.marketManager.cycle_duration:
             self.on_end_cycle()
@@ -80,6 +89,28 @@ class MarketMonitor():
         if self.timer_status:
             self.scheduler.enter(1, 1, self.on_second)
     
+    def checkStopFTBTrades(self):
+        current_time = datetime.datetime.now()
+        trades = []
+        for t in self.trades:
+            if t.is_ftb and datetime.datetime.timestamp(current_time) >= datetime.datetime.timestamp(t.start_time) + t.ftb_time:
+                with self.app.app_context():
+                    user = User.query.filter_by(id=t.user_id).first()
+                    if user:
+                        trade = Trade.query.filter_by(id = t.id).first()
+                        trade.end_price = self.current_price
+                        trade.end_time = current_time
+                        if trade.type == 'buy':
+                            profit = (trade.end_price - trade.start_price) * trade.amount / trade.start_price
+                        else:
+                            profit = (trade.start_price - trade.end_price) * trade.amount / trade.start_price
+                        user.balance = user.balance + profit
+                        db.session.commit()
+            else:
+                trades.append(t)
+        
+        self.trades = trades
+
     def checkGrowth(self):
         if self.price_changes.count(1) >= self.marketManager.repeating_count - self.marketManager.repeating_break:
             if self.signal_status != 'pump':
@@ -114,4 +145,4 @@ class MarketMonitor():
         return self.bybitApi.getKline(resolution, _from, to)
     
     def addTrade(self, trade):
-        pass
+        self.trades.append(trade)

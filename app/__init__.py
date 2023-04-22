@@ -5,7 +5,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
 from flask_socketio import SocketIO
-
+from datetime import timedelta
 
 db = SQLAlchemy()
 jwt = JWTManager()
@@ -23,6 +23,8 @@ def create_app(config_name):
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
     
+    app.config['JWT_EXPIRATION_DELTA'] = timedelta(seconds=3600)
+
     CORS(app)
 
     jwt.init_app(app)
