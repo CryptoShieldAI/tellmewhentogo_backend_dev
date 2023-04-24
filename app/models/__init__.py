@@ -5,3 +5,4 @@ from .levelPercent import LevelPercent
 from .signal import Signal
 from .setting import Setting
 from .trade import Trade
+from .role import Role

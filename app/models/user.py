@@ -23,6 +23,8 @@ class User(db.Model):
 
     def toObject(self):
         return {
+            'id': self.id,
             'email': self.email,
-            'balance': self.balance
+            'balance': self.balance, 
+            'role_id': self.role_id
         }

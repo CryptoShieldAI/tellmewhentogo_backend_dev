@@ -49,4 +49,8 @@ def create_app(config_name):
     from .trade import trade as trade_blueprint
     app.register_blueprint(trade_blueprint, url_prefix='/trade')
 
+
+    from .admin import admin as admin_blueprint
+    app.register_blueprint(admin_blueprint, url_prefix='/admin')
+
     return app

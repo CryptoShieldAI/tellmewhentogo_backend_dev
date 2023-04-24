@@ -8,3 +8,8 @@ class Role(db.Model):
     def __init__(self, role):
         self.role = role
         
+    def toObject(self):
+        return {
+            'id': self.id, 
+            'role': self.role
+        }
