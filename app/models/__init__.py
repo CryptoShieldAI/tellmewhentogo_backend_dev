@@ -6,3 +6,4 @@ from .signal import Signal
 from .setting import Setting
 from .trade import Trade
 from .role import Role
+from .bot import Bot
