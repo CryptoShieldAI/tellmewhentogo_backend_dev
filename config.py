@@ -3,7 +3,7 @@ import os
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'tellmewhentogo'
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
     JWT_COOKIE_SECURE = True
     
     @staticmethod

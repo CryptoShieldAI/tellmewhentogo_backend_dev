@@ -1,4 +1,4 @@
-from threading import Thread
+from threading import Thread\nimport os
 import json
 import time
 import hmac
@@ -17,8 +17,8 @@ class BybitApi:
     def __init__(
         self,
         market="USD",
-        api_key="DRRDAFDYACYXVIKTAB",
-        secret="ILCFYXXKINOTIWUHJGEWNJRSRZHYZLEOXLRL",
+        api_key=os.environ.get("BYBIT_API_KEY"),
+        secret=os.environ.get("BYBIT_SECRET"),
         test=False,
     ):
         self.api_key = api_key
