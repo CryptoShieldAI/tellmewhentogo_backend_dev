@@ -19,6 +19,7 @@ class MarketMonitor():
 
         self.price_changes = deque(maxlen=self.marketManager.repeating_count)
         self.transaction_history = deque(maxlen=15)
+        self.hmtp_history = deque(maxlen=15) # Pour AHMTP (15 cycles)
 
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.bybitApi = BybitApi(self)
@@ -49,6 +50,7 @@ class MarketMonitor():
         del self.bybitApi
 
     def initialize(self):\n        self.price_ticks_buffer = []
+        self.hmtp_buffer = 0
         self.second_in_cycle = 0
 
         # self.price_history is now obsolete, data is in DB
@@ -61,8 +63,10 @@ class MarketMonitor():
             self.scheduler.enter(1, 1, self.on_second)
             self.scheduler.run()
     
-    def on_ticker(self, ts, price):
-        self.current_price = float(price)\n        self.price_ticks_buffer.append(PriceTick(self.symbol, datetime.datetime.fromtimestamp(ts / 1000), self.current_price))
+    def on_trade(self, ts, price):
+         self.current_price = float(price)
+        self.price_ticks_buffer.append(PriceTick(self.symbol, datetime.datetime.fromtimestamp(ts / 1000), self.current_price))
+        self.hmtp_buffer += 1
 
 
     def on_second(self):\n        self.flush_price_ticks()
@@ -112,18 +116,44 @@ class MarketMonitor():
         self.trades = trades
 
     def checkGrowth(self):
-        if self.price_changes.count(1) >= self.marketManager.repeating_count - self.marketManager.repeating_break:
-            if self.signal_status != 'pump':
+        # Logique de l'algorithme original (Condition Level 1 & 2)
+        
+        # 1. Condition Level 1 (GR/DC) - Utilise price_changes (équivalent à CSMA)
+        repeating_count = self.marketManager.repeating_count
+        repeating_break = self.marketManager.repeating_break
+        
+        growth_count = self.price_changes.count(1)
+        decline_count = self.price_changes.count(3)
+        
+        is_growth = growth_count >= repeating_count - repeating_break
+        is_decline = decline_count >= repeating_count - repeating_break
+        
+        # 2. Condition Level 2 (PT20) - Simplifié pour l'instant à la persistance
+        # La logique PT20 est complexe et nécessite une analyse de l'historique de prix
+        # Pour l'instant, nous utilisons la détection simple comme base de GR/DC
+        
+        new_signal_status = 'flutuation'
+        if is_growth:
+            new_signal_status = 'pump'
+        elif is_decline:
+            new_signal_status = 'dump'
+            
+        # 3. Mise à jour du signal et intégration de l'Indice Volumique (VI)
+        if new_signal_status != self.signal_status:
+            if new_signal_status == 'flutuation':
+                # Fin du signal
                 self.marketManager.removeCurrentSignals(self.symbol)
-                self.signal_status = 'pump'
-                self.marketManager.addCurrentSignals(self.symbol)
-        elif self.price_changes.count(3) >= self.marketManager.repeating_count - self.marketManager.repeating_break:
-            if self.signal_status != 'dump':
-                self.marketManager.removeCurrentSignals(self.symbol)
-                self.signal_status = 'dump'
-                self.marketManager.addCurrentSignals(self.symbol)
-        else:
-            self.marketManager.removeCurrentSignals(self.symbol)
+                self.signal_status = new_signal_status
+            else:
+                # Nouveau signal (Pump ou Dump)
+                # L'Indice Volumique (self.current_pi) est calculé dans on_end_cycle
+                self.marketManager.removeCurrentSignals(self.symbol) # Supprime l'ancien
+                self.signal_status = new_signal_status
+                self.marketManager.addCurrentSignals(self.symbol) # Ajoute le nouveau avec le VI calculé
+        
+        # Note: La logique PT20 (répétition 20 fois avec 5 cassures) sera implémentée dans une phase ultérieure
+        # car elle nécessite une refonte plus profonde de la gestion de l'état.
+        # Pour l'instant, nous avons le VI (Indice de Confiance) et la détection de base.
     
     def flush_price_ticks(self):
         if self.price_ticks_buffer:
@@ -131,19 +161,42 @@ class MarketMonitor():
                 db.session.add_all(self.price_ticks_buffer)
                 db.session.commit()
             self.price_ticks_buffer = []
+        self.hmtp_buffer = 0
 
     def on_end_cycle(self):
+        # 1. Calcul et stockage de l'HMTP (Indice Volumique)
+        current_hmtp = self.hmtp_buffer
+        self.hmtp_history.append(current_hmtp)
+        self.hmtp_buffer = 0 # Réinitialise le buffer pour le nouveau cycle
+        ahmtp = average(self.hmtp_history) # Calcule l'AHMTP (Average HMTP)
+
+        # 2. Calcul de l'Indice Volumique (VI)
+        volumique_index = 0
+        if ahmtp > 0:
+            growth_rate = (current_hmtp - ahmtp) / ahmtp * 100
+            if growth_rate > 25:
+                volumique_index = 5
+            elif growth_rate > 20:
+                volumique_index = 4
+            elif growth_rate > 15:
+                volumique_index = 3
+            elif growth_rate > 10:
+                volumique_index = 2
+            elif growth_rate > 5:
+                volumique_index = 1
+        self.current_pi = volumique_index # Remplacer l'ancien 'pi' par le nouvel Indice Volumique
+
         # average_price = Average(self.pricesOnSecond)
-        self.transaction_count_in_cycle = len(self.pricesOnSecond)
-        self.transaction_history.append(self.transaction_count_in_cycle)
-        ahmtp = average(self.transaction_history)
+        # self.transaction_count_in_cycle = len(self.pricesOnSecond) # Logique obsolète
+        # self.transaction_history.append(self.transaction_count_in_cycle) # Logique obsolète
+        # ahmtp = average(self.transaction_history) # Logique obsolète
         levelPercents = self.marketManager.level_percents.copy()
-        pi = 0
-        for idx, percent in enumerate(levelPercents):
-            if self.transaction_count_in_cycle > (100 + percent) * ahmtp / 100:
-                pi = self.marketManager.rank_level - idx
-                break
-        self.current_pi = pi
+        # pi = 0 # Logique obsolète
+        # for idx, percent in enumerate(levelPercents): # Logique obsolète
+            # if self.transaction_count_in_cycle > (100 + percent) * ahmtp / 100: # Logique obsolète
+                # pi = self.marketManager.rank_level - idx # Logique obsolète
+                # break # Logique obsolète
+        # self.current_pi = pi # Logique obsolète
         self.current_rank_level = self.marketManager.rank_level
 
         self.initialize()

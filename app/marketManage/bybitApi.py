@@ -70,7 +70,7 @@ class BybitApi:
 
         self.ws.send(
             json.dumps(
-                {"op": "subscribe", "args": ["tickers." + str(self.market.symbol)]}
+                {"op": "subscribe", "args": ["publicTrade." + str(self.market.symbol)]}
             )
         )
 
@@ -90,11 +90,11 @@ class BybitApi:
 
     def _on_message(self, message, utf8_received_data):
         message = json.loads(message)
-        if "topic" in message:
+        if "topic" in message and message["topic"].startswith("publicTrade"):
             # print(message)
-            ts = message["ts"]
-            lastPrice = message["data"]["lastPrice"]
-            self.market.on_ticker(ts, lastPrice)
+            # Le flux de transactions Bybit V5 renvoie un tableau de transactions dans message["data"]
+            for trade in message["data"]:\n                ts = trade["T"]\n                price = trade["p"]\n                self.market.on_trade(ts, price)
+
 
     def genSignature(self, time_stamp, payload):
         param_str = str(time_stamp) + self.api_key + self.recv_window + payload
