@@ -5,7 +5,7 @@ from flask import Flask
 from app import create_app, db, marketManager
 from app.models.role import Role
 from app.models.user import User
-from app.models.market import Market
+from app.models.market import Market\nfrom app.models.priceTick import PriceTick
 from flask_migrate import Migrate
 import warnings
 import click
