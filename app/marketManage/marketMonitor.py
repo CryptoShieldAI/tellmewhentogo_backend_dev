@@ -2,8 +2,8 @@ from collections import deque
 import sched
 import time
 import threading
-from .bybitApi import BybitApi
-import pandas as pd
+from .bybitApi import BybitApi\nfrom app.models import PriceTick
+import pandas as pd\nfrom app import db
 from .utils import *
 import datetime
 from app.models import User, Trade
@@ -48,11 +48,11 @@ class MarketMonitor():
         self.second_timer.join()
         del self.bybitApi
 
-    def initialize(self):
+    def initialize(self):\n        self.price_ticks_buffer = []
         self.second_in_cycle = 0
 
-        self.price_history = pd.DataFrame({'ts': [], 'price': []})
-        self.pricesOnSecond = pd.DataFrame({'price': []})
+        # self.price_history is now obsolete, data is in DB
+        self.pricesOnSecond = []
 
         self.start_cycle_time = int(time.time() * 1000)
 
@@ -61,13 +61,13 @@ class MarketMonitor():
             self.scheduler.enter(1, 1, self.on_second)
             self.scheduler.run()
     
-    def on_ticker(self, time, price):
-        self.current_price = float(price)
-        self.price_history = self.price_history.append({'ts': time, 'price': price}, ignore_index=True)
+    def on_ticker(self, ts, price):
+        self.current_price = float(price)\n        self.price_ticks_buffer.append(PriceTick(self.symbol, datetime.datetime.fromtimestamp(ts / 1000), self.current_price))
 
-    def on_second(self):
+
+    def on_second(self):\n        self.flush_price_ticks()
         self.second_in_cycle += 1
-        self.pricesOnSecond = self.pricesOnSecond.append({'price': self.current_price}, ignore_index=True)
+        self.pricesOnSecond.append(self.current_price)
 
         
         if self.current_price > self.prev_price:
@@ -125,9 +125,16 @@ class MarketMonitor():
         else:
             self.marketManager.removeCurrentSignals(self.symbol)
     
+    def flush_price_ticks(self):
+        if self.price_ticks_buffer:
+            with self.app.app_context():
+                db.session.add_all(self.price_ticks_buffer)
+                db.session.commit()
+            self.price_ticks_buffer = []
+
     def on_end_cycle(self):
-        # average_price = Average(self.price_history['price'])
-        self.transaction_count_in_cycle = len(self.price_history)
+        # average_price = Average(self.pricesOnSecond)
+        self.transaction_count_in_cycle = len(self.pricesOnSecond)
         self.transaction_history.append(self.transaction_count_in_cycle)
         ahmtp = average(self.transaction_history)
         levelPercents = self.marketManager.level_percents.copy()
