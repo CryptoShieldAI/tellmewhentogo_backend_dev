@@ -22,7 +22,7 @@ class TestingConfig(Config):
     
 class ProductionConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get('TEST_DATABASE_URL') or \
-        'sqlite:///' + os.path.join(basedir, 'data.sqlite')
+        os.environ.get('DATABASE_URL') or 'postgresql://user:password@localhost/dbname'
     
 config = {
     'development': DevelopmentConfig,
